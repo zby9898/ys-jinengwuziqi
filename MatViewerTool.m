@@ -30,14 +30,11 @@ classdef MatViewerTool < matlab.apps.AppBase
         
         % 控制按钮
         ImportBtn               matlab.ui.control.Button
-        WaveformBtn             matlab.ui.control.Button
-        OriginalBtn             matlab.ui.control.Button
-        DbBtn                   matlab.ui.control.Button
-        Mesh3DBtn               matlab.ui.control.Button
-        DbMesh3DBtn             matlab.ui.control.Button
-        SARBtn                  matlab.ui.control.Button
         AutoPlayBtn             matlab.ui.control.Button
         ExportBtn               matlab.ui.control.Button
+
+        % 显示模式状态（记录当前帧可用的显示模式）
+        AvailableDisplayModes   struct
         
         % 滑动条和帧控制
         FrameSlider             matlab.ui.control.Slider
@@ -2294,53 +2291,60 @@ classdef MatViewerTool < matlab.apps.AppBase
         end
         
         function updateDisplayButtonsState(app)
-            % 根据当前帧数据类型更新按钮状态
+            % 根据当前帧数据类型更新可用的显示模式状态
+            % 注：此函数不再控制按钮，而是记录当前帧可用的显示模式
+            % 菜单功能会根据 app.AvailableDisplayModes 来决定哪些选项可用
+
             if isempty(app.MatData) || app.CurrentIndex > length(app.MatData)
-                % 没有数据时，所有按钮禁用
-                app.WaveformBtn.Enable = 'off';
-                app.OriginalBtn.Enable = 'off';
-                app.DbBtn.Enable = 'off';
-                app.Mesh3DBtn.Enable = 'off';
-                app.DbMesh3DBtn.Enable = 'off';
-                app.SARBtn.Enable = 'off';
+                % 没有数据时，所有显示模式都不可用
+                app.AvailableDisplayModes = struct(...
+                    'Waveform', false, ...
+                    'Original', false, ...
+                    'Db', false, ...
+                    'Mesh3D', false, ...
+                    'DbMesh3D', false, ...
+                    'SAR', false);
                 return;
             end
-            
+
             % 判断文件名是否为SAR
             [~, filename] = fileparts(app.MatFiles{app.CurrentIndex});
             isSAR = startsWith(lower(filename), 'sar');
-            
+
             % 获取当前矩阵
             data = app.MatData{app.CurrentIndex};
             complexMatrix = data.complex_matrix;
             isVector = isvector(complexMatrix);
-            
+
             if isSAR
-                % ===== 第一类：SAR文件 - 只有SAR图按钮可用 =====
-                app.WaveformBtn.Enable = 'off';
-                app.OriginalBtn.Enable = 'off';
-                app.DbBtn.Enable = 'off';
-                app.Mesh3DBtn.Enable = 'off';
-                app.DbMesh3DBtn.Enable = 'off';
-                app.SARBtn.Enable = 'on';
-                
+                % ===== 第一类：SAR文件 - 只有SAR图可用 =====
+                app.AvailableDisplayModes = struct(...
+                    'Waveform', false, ...
+                    'Original', false, ...
+                    'Db', false, ...
+                    'Mesh3D', false, ...
+                    'DbMesh3D', false, ...
+                    'SAR', true);
+
             elseif isVector
                 % ===== 第二类：向量数据 - 只有时域波形图可用 =====
-                app.WaveformBtn.Enable = 'on';
-                app.OriginalBtn.Enable = 'off';
-                app.DbBtn.Enable = 'off';
-                app.Mesh3DBtn.Enable = 'off';
-                app.DbMesh3DBtn.Enable = 'off';
-                app.SARBtn.Enable = 'off';
-                
+                app.AvailableDisplayModes = struct(...
+                    'Waveform', true, ...
+                    'Original', false, ...
+                    'Db', false, ...
+                    'Mesh3D', false, ...
+                    'DbMesh3D', false, ...
+                    'SAR', false);
+
             else
-                % ===== 第三类：矩阵数据 - 原图和3D按钮可用 =====
-                app.WaveformBtn.Enable = 'off';
-                app.OriginalBtn.Enable = 'on';
-                app.DbBtn.Enable = 'on';
-                app.Mesh3DBtn.Enable = 'on';
-                app.DbMesh3DBtn.Enable = 'on';
-                app.SARBtn.Enable = 'off';
+                % ===== 第三类：矩阵数据 - 原图和3D图可用 =====
+                app.AvailableDisplayModes = struct(...
+                    'Waveform', false, ...
+                    'Original', true, ...
+                    'Db', true, ...
+                    'Mesh3D', true, ...
+                    'DbMesh3D', true, ...
+                    'SAR', false);
             end
         end
         
