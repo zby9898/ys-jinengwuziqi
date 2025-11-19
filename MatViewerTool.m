@@ -136,8 +136,7 @@ classdef MatViewerTool < matlab.apps.AppBase
             app.PreprocessingList = {};
             app.PreprocessingResults = {};
             app.CurrentPrepIndex = 1;  % 默认显示原图
-            app.ActiveDropdownMenu = [];  % 初始化下拉菜单为空
-            
+
             % 创建 UIFigure 和组件
             createComponents(app);
             
@@ -6316,7 +6315,7 @@ classdef MatViewerTool < matlab.apps.AppBase
             % 关闭当前打开的下拉菜单
             if ~isempty(app.ActiveDropdownMenu) && isvalid(app.ActiveDropdownMenu)
                 delete(app.ActiveDropdownMenu);
-                app.ActiveDropdownMenu = [];
+                % 删除后，MATLAB会自动将其设置为未定义状态
             end
         end
 
