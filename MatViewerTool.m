@@ -6102,7 +6102,7 @@ classdef MatViewerTool < matlab.apps.AppBase
         function handleTitleClick(app, ax, data, titleStr, sourceColumn, event)
             % 处理标题点击事件（包含菜单和关闭）
             % 获取标题文本对象
-            titleObj = title(ax);
+            titleObj = ax.Title;
             titleTextStr = titleObj.String;
 
             % 粗略判断：如果点击在右侧，认为是点击关闭按钮
@@ -6162,41 +6162,25 @@ classdef MatViewerTool < matlab.apps.AppBase
         end
 
         function changeDisplayMode(app, ax, data, titleStr, sourceColumn, displayMode)
-            % 改变当前axes的显示模式
+            % 弹出新窗口显示不同的显示模式
             if ~isfield(data, 'complex_matrix')
                 return;
             end
 
-            complexMatrix = data.complex_matrix;
-
-            % 清空当前axes
-            cla(ax);
-
-            % 根据显示模式重新显示
+            % 根据显示模式调用对应的弹窗函数
             switch displayMode
                 case '时域波形图'
-                    displayWaveformInAxes(app, ax, complexMatrix, titleStr);
+                    showTimeWaveform(app);
                 case 'SAR图'
-                    displaySARInAxes(app, ax, complexMatrix, titleStr);
+                    showSARImage(app);
                 case '原图'
-                    displayMatrixImagescInAxes(app, ax, complexMatrix, false, titleStr);
+                    showOriginalImage(app);
                 case '原图dB'
-                    displayMatrixImagescInAxes(app, ax, complexMatrix, true, titleStr);
+                    showDbImage(app);
                 case '3D图像'
-                    displayMatrixMeshInAxes(app, ax, complexMatrix, false, titleStr);
+                    show3DMesh(app);
                 case '3D图像dB'
-                    displayMatrixMeshInAxes(app, ax, complexMatrix, true, titleStr);
-            end
-
-            % 重新设置标题（因为cla会清除标题）
-            if sourceColumn == 0
-                titleText = sprintf('[菜单▼]  %s', titleStr);
-                t = title(ax, titleText, 'FontSize', 10, 'Interpreter', 'none');
-                t.ButtonDownFcn = @(~, event)showDisplayMenu(app, ax, data, titleStr, sourceColumn, event);
-            else
-                titleText = sprintf('[菜单▼]  %s  [关闭×]', titleStr);
-                t = title(ax, titleText, 'FontSize', 10, 'Interpreter', 'none');
-                t.ButtonDownFcn = @(~, event)handleTitleClick(app, ax, data, titleStr, sourceColumn, event);
+                    showDb3DMesh(app);
             end
         end
 
