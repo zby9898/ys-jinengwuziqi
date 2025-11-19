@@ -350,9 +350,9 @@ classdef MatViewerTool < matlab.apps.AppBase
             fieldLayout.Padding = [5 5 5 5];
             
             app.FieldTable = uitable(fieldLayout);
-            app.FieldTable.ColumnName = {'字段', '字段名', '字段值', '数据类型'};
-            app.FieldTable.ColumnWidth = {'1x', '1x', '2x', '1x'};
-            app.FieldTable.RowName = {};
+            app.FieldTable.ColumnName = {};  % 列名将在 updateFrameInfoDisplay 中动态设置
+            app.FieldTable.ColumnWidth = {};  % 列宽将在 updateFrameInfoDisplay 中动态设置
+            app.FieldTable.RowName = {'字段', '字段名', '字段值', '数据类型'};  % 转置后的行名
             app.FieldTable.Layout.Row = 1;
             app.FieldTable.Layout.Column = 1;
             % 添加双击回调
@@ -1929,82 +1929,123 @@ classdef MatViewerTool < matlab.apps.AppBase
         end
         
         function updateFrameInfoDisplay(app)
-            % 更新帧信息显示（表格方式）
+            % 更新帧信息显示（转置表格方式）
             if isempty(app.MatData) || app.CurrentIndex > length(app.MatData)
                 app.FieldTable.Data = {};
+                app.FieldTable.ColumnName = {};
                 return;
             end
-            
+
             data = app.MatData{app.CurrentIndex};
             fieldNames = fieldnames(data);
-            
-            % 构建表格数据
-            tableData = {};
-            rowIndex = 1;
-            
+
+            % 收集所有字段信息
+            fieldInfoList = {};  % {displayName, fieldName, valueStr, dataType}
+            fieldIndex = 1;
+
             % 遍历所有字段
             for i = 1:length(fieldNames)
                 fieldName = fieldNames{i};
-                
+
                 % 跳过 complex_matrix 和 original_matrix_field
                 if strcmp(fieldName, 'complex_matrix') || strcmp(fieldName, 'original_matrix_field')
                     continue;
                 end
-                
+
                 value = data.(fieldName);
-                
+
                 % 如果是frame_info且是struct，展开显示其字段（但不递归展开）
                 if strcmp(fieldName, 'frame_info') && isstruct(value)
                     structFields = fieldnames(value);
                     for j = 1:length(structFields)
                         subFieldName = structFields{j};
                         subValue = value.(subFieldName);
-                        
+
                         % 格式化字段值
                         [valueStr, dataType] = formatFieldValueForTable(app, subValue);
 
                         % 使用从Excel读取的字段名称
-                        if rowIndex <= length(app.FieldDisplayNames)
-                            tableData{rowIndex, 1} = app.FieldDisplayNames{rowIndex};
+                        if fieldIndex <= length(app.FieldDisplayNames)
+                            displayName = app.FieldDisplayNames{fieldIndex};
                         else
-                            tableData{rowIndex, 1} = sprintf('字段%d', rowIndex);
+                            displayName = sprintf('字段%d', fieldIndex);
                         end
 
                         % 追加单位到字段值（如果有的话）
-                        if rowIndex <= length(app.FieldUnits) && ~isempty(app.FieldUnits{rowIndex})
-                            valueStr = [valueStr, app.FieldUnits{rowIndex}];
+                        if fieldIndex <= length(app.FieldUnits) && ~isempty(app.FieldUnits{fieldIndex})
+                            valueStr = [valueStr, app.FieldUnits{fieldIndex}];
                         end
 
-                        tableData{rowIndex, 2} = subFieldName;  % 只显示字段名，不带frame_info前缀
-                        tableData{rowIndex, 3} = valueStr;
-                        tableData{rowIndex, 4} = dataType;
-                        
-                        rowIndex = rowIndex + 1;
+                        fieldInfoList{fieldIndex, 1} = displayName;
+                        fieldInfoList{fieldIndex, 2} = subFieldName;  % 只显示字段名，不带frame_info前缀
+                        fieldInfoList{fieldIndex, 3} = valueStr;
+                        fieldInfoList{fieldIndex, 4} = dataType;
+
+                        fieldIndex = fieldIndex + 1;
                     end
                 else
                     % 其他字段正常显示
                     [valueStr, dataType] = formatFieldValueForTable(app, value);
 
-                    if rowIndex <= length(app.FieldDisplayNames)
-                        tableData{rowIndex, 1} = app.FieldDisplayNames{rowIndex};
+                    if fieldIndex <= length(app.FieldDisplayNames)
+                        displayName = app.FieldDisplayNames{fieldIndex};
                     else
-                        tableData{rowIndex, 1} = sprintf('字段%d', rowIndex);
+                        displayName = sprintf('字段%d', fieldIndex);
                     end
 
                     % 追加单位到字段值（如果有的话）
-                    if rowIndex <= length(app.FieldUnits) && ~isempty(app.FieldUnits{rowIndex})
-                        valueStr = [valueStr, app.FieldUnits{rowIndex}];
+                    if fieldIndex <= length(app.FieldUnits) && ~isempty(app.FieldUnits{fieldIndex})
+                        valueStr = [valueStr, app.FieldUnits{fieldIndex}];
                     end
 
-                    tableData{rowIndex, 2} = fieldName;
-                    tableData{rowIndex, 3} = valueStr;
-                    tableData{rowIndex, 4} = dataType;
-                    rowIndex = rowIndex + 1;
+                    fieldInfoList{fieldIndex, 1} = displayName;
+                    fieldInfoList{fieldIndex, 2} = fieldName;
+                    fieldInfoList{fieldIndex, 3} = valueStr;
+                    fieldInfoList{fieldIndex, 4} = dataType;
+                    fieldIndex = fieldIndex + 1;
                 end
             end
-            
-            % 更新表格显示
-            app.FieldTable.Data = tableData;
+
+            % 转置显示：行为属性（字段、字段名、字段值、数据类型），列为各个字段
+            if ~isempty(fieldInfoList)
+                numFields = size(fieldInfoList, 1);
+
+                % 设置列名为字段的显示名称
+                columnNames = cell(1, numFields);
+                for i = 1:numFields
+                    columnNames{i} = fieldInfoList{i, 1};  % 使用displayName作为列名
+                end
+                app.FieldTable.ColumnName = columnNames;
+
+                % 构建转置后的表格数据（4行 x N列）
+                tableData = cell(4, numFields);
+                for col = 1:numFields
+                    tableData{1, col} = fieldInfoList{col, 1};  % 字段（显示名称）
+                    tableData{2, col} = fieldInfoList{col, 2};  % 字段名
+                    tableData{3, col} = fieldInfoList{col, 3};  % 字段值
+                    tableData{4, col} = fieldInfoList{col, 4};  % 数据类型
+                end
+
+                % 设置行名
+                app.FieldTable.RowName = {'字段', '字段名', '字段值', '数据类型'};
+
+                % 更新表格显示
+                app.FieldTable.Data = tableData;
+
+                % 动态调整列宽：平均分配
+                numCols = numFields;
+                if numCols > 0
+                    colWidthStr = cell(1, numCols);
+                    for i = 1:numCols
+                        colWidthStr{i} = '1x';  % 均等分配宽度
+                    end
+                    app.FieldTable.ColumnWidth = colWidthStr;
+                end
+            else
+                app.FieldTable.Data = {};
+                app.FieldTable.ColumnName = {};
+                app.FieldTable.RowName = {};
+            end
         end
         
         function onFieldTableDoubleClick(app, event)
