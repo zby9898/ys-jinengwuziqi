@@ -108,7 +108,10 @@ classdef MatViewerTool < matlab.apps.AppBase
         CloseBtn2               matlab.ui.control.Button  % 添加
         CloseBtn3               matlab.ui.control.Button  % 添加
         CloseBtn4               matlab.ui.control.Button  % 添加
-        MultiViewPanel          matlab.ui.container.Panel        
+        MultiViewPanel          matlab.ui.container.Panel
+
+        % 下拉菜单
+        ActiveDropdownMenu      matlab.ui.container.Panel  % 当前打开的下拉菜单面板
     end
     
     methods (Access = public)
@@ -133,6 +136,7 @@ classdef MatViewerTool < matlab.apps.AppBase
             app.PreprocessingList = {};
             app.PreprocessingResults = {};
             app.CurrentPrepIndex = 1;  % 默认显示原图
+            app.ActiveDropdownMenu = [];  % 初始化下拉菜单为空
             
             % 创建 UIFigure 和组件
             createComponents(app);
@@ -6139,36 +6143,70 @@ classdef MatViewerTool < matlab.apps.AppBase
 
         function handleTitleClick(app, ax, data, titleStr, sourceColumn, event)
             % 处理标题点击事件（包含菜单和关闭）
-            % 获取标题文本对象
+            % 改进的点击区域判断：基于标题文本的实际布局
+
+            % 获取标题文本
             titleObj = title(ax);
             titleTextStr = titleObj.String;
 
-            % 粗略判断：如果点击在右侧，认为是点击关闭按钮
-            % 如果点击在左侧，认为是点击菜单
-            figPos = app.UIFigure.Position;
+            % 获取点击位置
             clickX = event.IntersectionPoint(1);
 
             % 获取axes的x范围
             xLim = ax.XLim;
             xRange = xLim(2) - xLim(1);
+            xCenter = (xLim(1) + xLim(2)) / 2;
 
-            % 如果点击位置在右侧30%区域，认为是关闭
-            if clickX > (xLim(1) + xRange * 0.7)
+            % 标题格式：'[菜单▼]  标题内容  [关闭×]'
+            % 估算文本布局：
+            % - 标题默认居中对齐
+            % - '[菜单▼]'约占文本的前10-15%
+            % - '[关闭×]'约占文本的后10-15%
+            % - 中间是标题内容
+
+            % 计算标题文本的相对宽度（基于字符数估算）
+            menuText = '[菜单▼]';
+            closeText = '[关闭×]';
+            totalTextLength = length(titleTextStr);
+            menuLength = length(menuText);
+            closeLength = length(closeText);
+
+            % 估算菜单和关闭文本在标题中的相对位置
+            % 标题居中，所以计算左右边界
+            titleWidthRatio = 0.4;  % 标题文本大约占据axes宽度的40%
+            titleWidth = xRange * titleWidthRatio;
+            titleLeft = xCenter - titleWidth / 2;
+            titleRight = xCenter + titleWidth / 2;
+
+            % 菜单区域：标题左侧部分
+            menuWidth = titleWidth * (menuLength / totalTextLength);
+            menuRight = titleLeft + menuWidth;
+
+            % 关闭区域：标题右侧部分
+            closeWidth = titleWidth * (closeLength / totalTextLength);
+            closeLeft = titleRight - closeWidth;
+
+            % 判断点击位置
+            if clickX >= titleLeft && clickX <= menuRight
+                % 点击在【菜单▼】区域
+                showDisplayMenu(app, ax, data, titleStr, sourceColumn, event);
+            elseif clickX >= closeLeft && clickX <= titleRight
+                % 点击在【关闭×】区域
                 closeSubView(app, sourceColumn);
             else
-                % 否则显示菜单
+                % 点击在中间标题文本区域，默认显示菜单
                 showDisplayMenu(app, ax, data, titleStr, sourceColumn, event);
             end
         end
 
         function showDisplayMenu(app, ax, data, titleStr, sourceColumn, event)
-            % 显示显示模式菜单（使用 AvailableDisplayModes 控制可用性）
+            % 显示下拉式显示模式菜单（使用 AvailableDisplayModes 控制可用性）
             if ~isfield(data, 'complex_matrix')
                 return;
             end
 
-            % 创建上下文菜单
-            cm = uicontextmenu(app.UIFigure);
+            % 关闭之前打开的菜单（如果有的话）
+            closeActiveDropdownMenu(app);
 
             % 检查是否有可用的显示模式状态
             if ~isempty(app.AvailableDisplayModes)
@@ -6189,46 +6227,107 @@ classdef MatViewerTool < matlab.apps.AppBase
                     'DbMesh3D', ~isVector);
             end
 
-            % 创建所有菜单项，根据状态设置启用/禁用
-            % 时域波形图
-            m1 = uimenu(cm, 'Text', '时域波形图', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, '时域波形图'));
-            if ~modes.Waveform
-                m1.Enable = 'off';
+            % 创建下拉菜单面板
+            menuWidth = 150;
+            menuItemHeight = 30;
+            menuHeight = menuItemHeight * 6;  % 6个菜单项
+
+            % 获取鼠标点击位置（在figure坐标系中）
+            mousePos = app.UIFigure.CurrentPoint;
+
+            % 创建浮动菜单面板
+            menuPanel = uipanel(app.UIFigure);
+            menuPanel.Position = [mousePos(1), mousePos(2) - menuHeight, menuWidth, menuHeight];
+            menuPanel.BorderType = 'line';
+            menuPanel.BackgroundColor = [0.95 0.95 0.95];
+            menuPanel.AutoResizeChildren = 'off';
+
+            % 保存菜单面板引用
+            app.ActiveDropdownMenu = menuPanel;
+
+            % 创建菜单项（从上到下）
+            menuItems = {
+                {'时域波形图', '时域波形图', modes.Waveform};
+                {'SAR图', 'SAR图', modes.SAR};
+                {'原图放大', '原图', modes.Original};
+                {'原图dB放大', '原图dB', modes.Db};
+                {'3D图像放大', '3D图像', modes.Mesh3D};
+                {'3D图像dB放大', '3D图像dB', modes.DbMesh3D}
+            };
+
+            for i = 1:6
+                itemText = menuItems{i}{1};
+                displayMode = menuItems{i}{2};
+                isEnabled = menuItems{i}{3};
+
+                % 创建菜单项按钮
+                btn = uibutton(menuPanel, 'push');
+                btn.Text = itemText;
+                btn.Position = [0, menuHeight - i * menuItemHeight, menuWidth, menuItemHeight];
+                btn.FontSize = 11;
+                btn.HorizontalAlignment = 'left';
+                btn.BackgroundColor = [1 1 1];
+
+                if isEnabled
+                    % 设置点击回调
+                    btn.ButtonPushedFcn = @(~,~) handleMenuItemClick(app, ax, data, titleStr, sourceColumn, displayMode);
+                else
+                    % 禁用按钮
+                    btn.Enable = 'off';
+                    btn.BackgroundColor = [0.9 0.9 0.9];
+                end
             end
 
-            % SAR图
-            m2 = uimenu(cm, 'Text', 'SAR图', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, 'SAR图'));
-            if ~modes.SAR
-                m2.Enable = 'off';
+            % 设置面板为最上层
+            uistack(menuPanel, 'top');
+
+            % 设置figure的WindowButtonDownFcn来检测点击外部
+            app.UIFigure.WindowButtonDownFcn = @(~,~) checkAndCloseMenu(app, menuPanel);
+        end
+
+        function checkAndCloseMenu(app, menuPanel)
+            % 检查点击位置，如果在菜单外部则关闭菜单
+            if ~isvalid(menuPanel)
+                % 菜单已经被关闭，移除回调
+                app.UIFigure.WindowButtonDownFcn = [];
+                return;
             end
 
-            % 原图放大
-            m3 = uimenu(cm, 'Text', '原图放大', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, '原图'));
-            if ~modes.Original
-                m3.Enable = 'off';
-            end
+            % 获取点击位置
+            clickPos = app.UIFigure.CurrentPoint;
 
-            % 原图dB放大
-            m4 = uimenu(cm, 'Text', '原图dB放大', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, '原图dB'));
-            if ~modes.Db
-                m4.Enable = 'off';
-            end
+            % 获取菜单面板的位置
+            menuPos = menuPanel.Position;  % [x, y, width, height]
 
-            % 3D图像放大
-            m5 = uimenu(cm, 'Text', '3D图像放大', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, '3D图像'));
-            if ~modes.Mesh3D
-                m5.Enable = 'off';
-            end
+            % 检查点击是否在菜单内
+            isInside = clickPos(1) >= menuPos(1) && ...
+                       clickPos(1) <= menuPos(1) + menuPos(3) && ...
+                       clickPos(2) >= menuPos(2) && ...
+                       clickPos(2) <= menuPos(2) + menuPos(4);
 
-            % 3D图像dB放大
-            m6 = uimenu(cm, 'Text', '3D图像dB放大', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, '3D图像dB'));
-            if ~modes.DbMesh3D
-                m6.Enable = 'off';
+            % 如果点击在外部，关闭菜单
+            if ~isInside
+                closeActiveDropdownMenu(app);
+                app.UIFigure.WindowButtonDownFcn = [];
             end
+        end
 
-            % 显示菜单
-            cm.Position = app.UIFigure.CurrentPoint;
-            cm.Visible = 'on';
+        function closeActiveDropdownMenu(app)
+            % 关闭当前打开的下拉菜单
+            if ~isempty(app.ActiveDropdownMenu) && isvalid(app.ActiveDropdownMenu)
+                delete(app.ActiveDropdownMenu);
+                app.ActiveDropdownMenu = [];
+            end
+        end
+
+        function handleMenuItemClick(app, ax, data, titleStr, sourceColumn, displayMode)
+            % 处理菜单项点击事件
+            % 先关闭菜单
+            closeActiveDropdownMenu(app);
+            app.UIFigure.WindowButtonDownFcn = [];  % 移除点击监听
+
+            % 然后改变显示模式
+            changeDisplayMode(app, ax, data, titleStr, sourceColumn, displayMode);
         end
 
         function changeDisplayMode(app, ax, data, titleStr, sourceColumn, displayMode)
