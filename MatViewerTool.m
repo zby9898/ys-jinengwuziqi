@@ -1707,38 +1707,38 @@ classdef MatViewerTool < matlab.apps.AppBase
         
         function displaySingleView(app)
             % 单视图显示（原有逻辑）
-            
+
             if isempty(app.MatData) || app.CurrentIndex > length(app.MatData)
                 return;
             end
-            
+
             data = app.MatData{app.CurrentIndex};
             complexMatrix = data.complex_matrix;
-            
+
             % 判断文件名是否为SAR
             [~, filename] = fileparts(app.MatFiles{app.CurrentIndex});
             isSAR = startsWith(lower(filename), 'sar');
-            
+
             % 获取当前播放方式
             playMode = app.PlayModeCombo.Value;
-            
+
             % === 关键：重置所有axes的布局 ===
             % 隐藏其他axes
             app.ImageAxes2.Visible = 'off';
             app.ImageAxes3.Visible = 'off';
             app.ImageAxes4.Visible = 'off';
-            
+
             % 显示并重置ImageAxes1占满整个区域
             app.ImageAxes1.Visible = 'on';
             app.ImageAxes1.Layout.Row = [1 2];
             app.ImageAxes1.Layout.Column = [1 2];
-            
+
             % 清空所有图像
             cla(app.ImageAxes1);
             cla(app.ImageAxes2);
             cla(app.ImageAxes3);
             cla(app.ImageAxes4);
-            
+
             % 显示图像
             if isSAR
                 displaySARPreview(app, complexMatrix);
@@ -1756,6 +1756,23 @@ classdef MatViewerTool < matlab.apps.AppBase
                         displayMatrixMesh(app, complexMatrix, true);
                 end
             end
+
+            % 添加标题和菜单功能
+            % 构建标题字符串
+            if isSAR
+                titleStr = 'SAR图';
+            elseif isvector(complexMatrix)
+                titleStr = '时域波形图';
+            else
+                titleStr = playMode;
+            end
+
+            % 设置标题（原图只有菜单，没有关闭按钮）
+            titleText = sprintf('[菜单▼]  %s', titleStr);
+            t = title(app.ImageAxes1, titleText, 'FontSize', 10, 'Interpreter', 'none');
+
+            % 添加菜单点击事件（sourceColumn=0表示原图）
+            t.ButtonDownFcn = @(~, event)showDisplayMenu(app, app.ImageAxes1, data, titleStr, 0, event);
         end
         
         
