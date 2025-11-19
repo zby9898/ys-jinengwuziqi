@@ -6145,36 +6145,68 @@ classdef MatViewerTool < matlab.apps.AppBase
         end
 
         function showDisplayMenu(app, ax, data, titleStr, sourceColumn, event)
-            % 显示显示模式菜单
-            % 判断数据类型
+            % 显示显示模式菜单（使用 AvailableDisplayModes 控制可用性）
             if ~isfield(data, 'complex_matrix')
                 return;
             end
 
-            complexMatrix = data.complex_matrix;
-            [~, filename] = fileparts(app.MatFiles{app.CurrentIndex});
-            isSAR = startsWith(lower(filename), 'sar');
-            isVector = isvector(complexMatrix);
-
             % 创建上下文菜单
             cm = uicontextmenu(app.UIFigure);
 
-            % 时域波形图（仅向量数据）
-            if isVector
-                uimenu(cm, 'Text', '时域波形图', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, '时域波形图'));
+            % 检查是否有可用的显示模式状态
+            if ~isempty(app.AvailableDisplayModes)
+                modes = app.AvailableDisplayModes;
+            else
+                % 如果状态未初始化，使用默认逻辑
+                complexMatrix = data.complex_matrix;
+                [~, filename] = fileparts(app.MatFiles{app.CurrentIndex});
+                isSAR = startsWith(lower(filename), 'sar');
+                isVector = isvector(complexMatrix);
+
+                modes = struct(...
+                    'Waveform', isVector, ...
+                    'SAR', isSAR && ~isVector, ...
+                    'Original', ~isVector, ...
+                    'Db', ~isVector, ...
+                    'Mesh3D', ~isVector, ...
+                    'DbMesh3D', ~isVector);
             end
 
-            % SAR图（仅SAR数据）
-            if isSAR && ~isVector
-                uimenu(cm, 'Text', 'SAR图', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, 'SAR图'));
+            % 创建所有菜单项，根据状态设置启用/禁用
+            % 时域波形图
+            m1 = uimenu(cm, 'Text', '时域波形图', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, '时域波形图'));
+            if ~modes.Waveform
+                m1.Enable = 'off';
             end
 
-            % 矩阵数据的其他显示模式
-            if ~isVector
-                uimenu(cm, 'Text', '原图放大', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, '原图'));
-                uimenu(cm, 'Text', '原图dB放大', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, '原图dB'));
-                uimenu(cm, 'Text', '3D图像放大', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, '3D图像'));
-                uimenu(cm, 'Text', '3D图像dB放大', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, '3D图像dB'));
+            % SAR图
+            m2 = uimenu(cm, 'Text', 'SAR图', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, 'SAR图'));
+            if ~modes.SAR
+                m2.Enable = 'off';
+            end
+
+            % 原图放大
+            m3 = uimenu(cm, 'Text', '原图放大', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, '原图'));
+            if ~modes.Original
+                m3.Enable = 'off';
+            end
+
+            % 原图dB放大
+            m4 = uimenu(cm, 'Text', '原图dB放大', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, '原图dB'));
+            if ~modes.Db
+                m4.Enable = 'off';
+            end
+
+            % 3D图像放大
+            m5 = uimenu(cm, 'Text', '3D图像放大', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, '3D图像'));
+            if ~modes.Mesh3D
+                m5.Enable = 'off';
+            end
+
+            % 3D图像dB放大
+            m6 = uimenu(cm, 'Text', '3D图像dB放大', 'MenuSelectedFcn', @(~,~)changeDisplayMode(app, ax, data, titleStr, sourceColumn, '3D图像dB'));
+            if ~modes.DbMesh3D
+                m6.Enable = 'off';
             end
 
             % 显示菜单
