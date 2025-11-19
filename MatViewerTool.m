@@ -4172,8 +4172,8 @@ classdef MatViewerTool < matlab.apps.AppBase
                             if row <= size(paramTable.Data, 1) && ~isempty(paramTable.Data{row, 5})
                                 paramTable.Data(row, :) = [];
                             end
-                        % 点击第1列或第2列：展开/折叠struct（让操作更灵敏）
-                        elseif col == 1 || col == 2
+                        % 点击第1列（展开列）：展开/折叠struct
+                        elseif col == 1
                             if row <= size(paramTable.Data, 1)
                                 expandIcon = paramTable.Data{row, 1};
                                 paramName = paramTable.Data{row, 2};
