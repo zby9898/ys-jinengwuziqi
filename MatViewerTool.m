@@ -351,7 +351,7 @@ classdef MatViewerTool < matlab.apps.AppBase
             
             app.FieldTable = uitable(fieldLayout);
             app.FieldTable.ColumnName = {};  % 列名将在 updateFrameInfoDisplay 中动态设置
-            app.FieldTable.ColumnWidth = {};  % 列宽将在 updateFrameInfoDisplay 中动态设置
+            app.FieldTable.ColumnWidth = 'auto';  % 列宽将在 updateFrameInfoDisplay 中动态设置
             app.FieldTable.RowName = {'字段', '字段名', '字段值', '数据类型'};  % 转置后的行名
             app.FieldTable.Layout.Row = 1;
             app.FieldTable.Layout.Column = 1;
